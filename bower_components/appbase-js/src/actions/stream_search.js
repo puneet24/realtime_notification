@@ -1,4 +1,4 @@
-var bulkService = function bulkService(client, args) {
+var streamSearchService = function streamSearchService(client, args) {
 	this.args = args
 
 	var valid = this.validate()
@@ -10,23 +10,28 @@ var bulkService = function bulkService(client, args) {
 	var body = args.body
 	delete args.type
 	delete args.body
+	delete args.stream
 
-	if(id) {
-		path = type + '/_bulk'
+	if(args.stream === true || args.stream === 'true') {
+		args.stream = 'true'
 	} else {
-		path = '/_bulk'
+		delete args.stream
+		args.streamonly = 'true'
 	}
 
-	return client.performStreamingRequest({
+	return client.performWsRequest({
 		method: 'POST',
-		path: path,
+		path: type + '/_search',
 		params: args,
 		body: body
 	})
 }
 
-bulkService.prototype.validate = function validate() {
+streamSearchService.prototype.validate = function validate() {
 	var invalid = []
+	if(typeof this.args.type !== 'string' || this.args.type === '') {
+		invalid.push('type')
+	}
 	if(typeof this.args.body !== 'object' || this.args.body === null) {
 		invalid.push('body')
 	}
@@ -43,4 +48,4 @@ bulkService.prototype.validate = function validate() {
 	return true
 }
 
-module.exports = bulkService
+module.exports = streamSearchService

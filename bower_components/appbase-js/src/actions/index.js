@@ -13,6 +13,7 @@ var indexService = function indexService(client, args) {
 	delete args.id
 	delete args.body
 
+	var path
 	if(id) {
 		path = type + '/' + id
 	} else {

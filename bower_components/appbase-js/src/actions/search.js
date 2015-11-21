@@ -11,7 +11,8 @@ var searchService = function searchService(client, args) {
 	delete args.type
 	delete args.body
 
-	if(id) {
+	var path
+	if(type) {
 		path = type + '/_search'
 	} else {
 		path = '/_search'
