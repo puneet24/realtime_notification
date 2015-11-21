@@ -49,21 +49,66 @@
         sendNotification : function() {
           var notificationobj = this;
           console.log(notificationobj.state);
-          appbase.streamSearch({
+          appbase.search({
+            type: "client",
+            body: {
+              "query": {
+                "filtered": {
+                  "query" : {
+                      "bool" : {
+                        "should" : [
+                          { "match" : {"appversion_no" : notificationobj.state.appversion_no}},
+                          { "match" : {"country" : notificationobj.state.country}}
+                        ],
+                        "minimum_should_match" : 2
+                      }
+                  },
+                  "filter": {
+                        "range" : {
+                          "age" : {
+                            "lte" : notificationobj.state.maxage,
+                            "gte" : notificationobj.state.minage
+                          }
+                        }
+                  }
+                }
+              }
+            }
+          }).on('data', function(res) {
+            for(var i=0;i<res.hits.total;i++){
+              appbase.index({
+                type: 'notification',
+                body: { "clientid" : res.hits.hits[i]._id, "message" : notificationobj.state.message }
+              }).on('data', function(response) {
+                console.log(response);
+              }).on('error', function(error) {
+                console.log(error);
+              });
+            }
+          }).on('error', function(err) {
+            console.log("search error: ", err);
+          });
+          appbase.searchStream({
             type: 'client',
             body: {
               "query": {
                 "filtered": {
-                  "query": {
-                    "match" : { "appversion_no" :  notificationobj.state.appversion_no}
+                  "query" : {
+                      "bool" : {
+                        "should" : [
+                          { "match" : {"appversion_no" : notificationobj.state.appversion_no}},
+                          { "match" : {"country" : notificationobj.state.country}}
+                        ],
+                        "minimum_should_match" : 2
+                      }
                   },
                   "filter": {
-                    "range" : {
-                      "age" : {
-                          "lte" : notificationobj.state.maxage,
-                          "gte" : notificationobj.state.minage
-                      }
-                    }
+                        "range" : {
+                          "age" : {
+                            "lte" : notificationobj.state.maxage,
+                            "gte" : notificationobj.state.minage
+                          }
+                        }
                   }
                 }
               }
@@ -120,10 +165,24 @@
           });
           this.setState({ msglist : [] });
         },
-        render : function() {
+        componentWillMount : function() {
           var clientobj = this;
           var clientid = this.props.clientid
-          appbase.streamSearch({
+          appbase.search({
+            type: "notification",
+            body: {
+              query: {
+                "match" : { "clientid" : clientid }
+              }
+            }
+          }).on('data', function(res) {
+            for(var i=0;i<res.hits.total;i++){
+              clientobj.setState({msglist : clientobj.state.msglist.concat([res.hits.hits[i]._source.message])});
+            }
+          }).on('error', function(err) {
+            console.log("search error: ", err);
+          });
+          appbase.searchStream({
             type: 'notification',
             body: {
               "query": {
@@ -131,13 +190,27 @@
               }
             }
           }).on('data', function(response) {
-            console.log(response);
+            clientobj.setState({ msglist : clientobj.state.msglist.concat(response._source.message) });
           }).on('error', function(error) {
             console.log("getStream() failed with: ", error)
           });
-
+        },
+        render : function() {
+          var clientobj = this;
+          var clientid = this.props.clientid
           return (
+            <div>
             <p id = {this.props.clientid}>Client  {this.props.clientid} {this.state.msglist.length}</p>
+            <div className={"well"}>
+              {
+                this.state.msglist.map(function(msg){
+                  return (
+                    <p key={msg}>{msg}</p>
+                  )
+                })
+              }
+            </div>
+            </div>
           );
         }
       });
@@ -168,6 +241,29 @@
           var newarray = this.state.clientids;
           newarray.splice(newarray.indexOf(parseInt(event.target.id)),1);
           this.setState({ clientids : newarray});
+
+          appbase.search({
+            type: "notification",
+            body: {
+              query: {
+                "match" : { "clientid" : event.target.id }
+              }
+            }
+          }).on('data', function(res) {
+            for(var i=0;i<res.hits.total;i++){
+              appbase.delete({
+                type: 'notification',
+                id : res.hits.hits[i]._id
+              }).on('data', function(res) {
+                console.log("successfully deleted: ", res);
+              }).on('error', function(err) {
+                console.log("deletion error: ", err);
+              });
+            }
+          }).on('error', function(err) {
+            console.log("search error: ", err);
+          });
+
           appbase.delete({
             type: 'client',
             id : event.target.id
@@ -186,8 +282,26 @@
         saveCountry : function(event) {
           this.setState({ country : event.target.value });
         },
+        componentWillMount : function() {
+          var addclientobj = this;
+          appbase.search({
+            type: "client",
+            body: {
+              query: {
+                match_all: {}
+              }
+            }
+          }).on('data', function(res) {
+            for(var i=0;i<res.hits.total;i++){
+              addclientobj.setState({clientids : addclientobj.state.clientids.concat([parseInt(res.hits.hits[i]._id)])});
+            }
+          }).on('error', function(err) {
+            console.log("search error: ", err);
+          });
+        },
         render : function() {
           var addclientobj = this;
+          
           return (
             <div>
               <input key={'age'} onChange={this.saveAge} value={this.state.age}></input>
